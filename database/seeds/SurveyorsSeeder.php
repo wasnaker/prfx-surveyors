@@ -97,6 +97,10 @@ class SurveyorsSeeder extends BaseSeeder
         $this->_clean();
         $this->_reset_names();
 
+        // Load ULID helper for hash generation
+        $CI = get_instance();
+        $CI->load->helper('apps/ulid');
+
         $r             = $this->db->get_where(db_prefix() . 'roles', ['name' => 'Surveyor Admin'])->row();
         $rid_admin     = $r ? (int) $r->roleid : 0;
         $r             = $this->db->get_where(db_prefix() . 'roles', ['name' => 'Surveyor'])->row();
@@ -131,6 +135,7 @@ class SurveyorsSeeder extends BaseSeeder
                 'country'     => $this->country,
                 'vat'         => $vat,
                 'client_type' => 'surveyor',
+                'hash'        => ulid(),
                 'active'      => 1,
                 'addedfrom'   => $staffid,
                 'datecreated' => $this->now,
@@ -143,6 +148,7 @@ class SurveyorsSeeder extends BaseSeeder
                 'lastname'            => $admin_last,
                 'password'            => app_hash_password('Demo1234!'),
                 'role'                => $rid_admin,
+                'hash'                => ulid(),
                 'active'              => 1,
                 'is_not_staff'        => 1,
                 'is_entity_owner'     => 1,
@@ -220,6 +226,7 @@ class SurveyorsSeeder extends BaseSeeder
             'phonenumber'         => $phone,
             'password'            => app_hash_password('Demo1234!'),
             'role'                => $role_id,
+            'hash'                => ulid(),
             'active'              => 1,
             'is_not_staff'        => 1,
             'is_entity_owner'     => 0,
