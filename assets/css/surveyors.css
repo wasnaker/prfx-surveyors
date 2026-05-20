@@ -1,0 +1,8 @@
+/* Surveyors Module CSS */
+
+/* Hide financial columns injected by core add_item_to_table — surveyor has no calculations */
+.accounting-template.surveyor table.items td.rate,
+.accounting-template.surveyor table.items td.taxrate,
+.accounting-template.surveyor table.items td.amount {
+    display: none;
+}

@@ -1,0 +1,853 @@
+<?php
+
+defined('BASEPATH') or exit('No direct script access allowed');
+
+/*
+Module Name: Surveyors
+Description: Full-featured Surveyors module for Perfex CRM — independent of core Estimates
+Version: 1.0.0
+Requires at least: 2.3.*
+*/
+
+define('SURVEYORS_MODULE_NAME', 'surveyors');
+define('SURVEYORS_ATTACHMENTS_FOLDER', FCPATH . 'uploads/surveyors/');
+
+// Pre-load surveyor mail template classes from module path.
+// App_mail_template::createReflectionMailClass() resolves paths without a module hint,
+// falling back to APPPATH/libraries/mails/ and emitting a warning for missing files.
+// Pre-loading ensures the class is already defined before that include_once runs,
+// so ReflectionClass succeeds and no exception is thrown.
+// The spl_autoload_register is a secondary safety net for any late-bound calls.
+$_surveyor_mail_classes = [
+    'Surveyor_send_to_surveyor',
+    'Surveyor_send_to_surveyor_already_sent',
+    'Surveyor_accepted_to_surveyor',
+    'Surveyor_accepted_to_staff',
+    'Surveyor_declined_to_staff',
+    'Surveyor_expiration_reminder',
+];
+foreach ($_surveyor_mail_classes as $_qmc) {
+    $_qmc_path = FCPATH . 'modules/' . SURVEYORS_MODULE_NAME . '/libraries/mails/' . $_qmc . '.php';
+    if (file_exists($_qmc_path) && !class_exists(strtolower($_qmc), false)) {
+        include_once($_qmc_path);
+    }
+}
+unset($_surveyor_mail_classes, $_qmc, $_qmc_path);
+
+spl_autoload_register(function ($class) {
+    $mail_path = FCPATH . 'modules/' . SURVEYORS_MODULE_NAME . '/libraries/mails/' . ucfirst($class) . '.php';
+    if (file_exists($mail_path)) {
+        include_once($mail_path);
+    }
+});
+
+// SMS trigger constants
+define('SMS_TRIGGER_SURVEYOR_EXP_REMINDER', 'surveyor_expiration_reminder');
+
+// Status constants
+define('SURVEYOR_STATUS_DRAFT',    1);
+define('SURVEYOR_STATUS_SENT',     2);
+define('SURVEYOR_STATUS_DECLINED', 3);
+define('SURVEYOR_STATUS_ACCEPTED', 4);
+define('SURVEYOR_STATUS_EXPIRED',  5);
+
+// ─── Hooks ───────────────────────────────────────────────────────────────────
+
+hooks()->add_action('admin_init',                    'surveyors_module_init_menu_items');
+hooks()->add_action('after_email_templates',         'surveyors_email_templates_section');
+hooks()->add_action('admin_init',                    'surveyors_permissions');
+hooks()->add_action('admin_init',                    'surveyors_ensure_role_permissions');
+hooks()->add_action('admin_init',                    'surveyors_settings_tab');
+hooks()->add_action('admin_init',                    'surveyors_register_app_table');
+hooks()->add_action('after_cron_run',                'surveyors_notification');
+hooks()->add_action('staff_member_deleted',          'surveyors_staff_member_deleted');
+
+hooks()->add_filter('migration_tables_to_replace_old_links',    'surveyors_migration_tables_to_replace_old_links');
+hooks()->add_filter('other_merge_fields_available_for',          'surveyors_other_merge_fields_available_for');
+hooks()->add_filter('global_search_result_query',  'surveyors_global_search_result_query', 10, 3);
+hooks()->add_filter('global_search_result_output', 'surveyors_global_search_result_output', 10, 2);
+hooks()->add_filter('get_dashboard_widgets',        'surveyors_add_dashboard_widget');
+hooks()->add_filter('module_surveyors_action_links', 'module_surveyors_action_links');
+hooks()->add_filter('get_contact_permissions',        'surveyors_add_contact_permission');
+hooks()->add_filter('staff_can', 'surveyors_staff_can_filter', 10, 4);
+hooks()->add_filter('staff_permissions', 'surveyors_add_staff_permissions', 10, 2);
+hooks()->add_action('app_admin_footer', 'surveyors_inactive_company_modal');
+hooks()->add_filter('customers_table_sql_where',          'surveyors_filter_customers_by_connection');
+hooks()->add_filter('can_view_customer_profile',          'surveyors_can_view_customer_profile', 10, 2);
+hooks()->add_filter('personnels_permits_datatable_where', 'surveyors_filter_permits_by_connection', 10, 2);
+hooks()->add_filter('can_view_personnel_permit',          'surveyors_can_view_personnel_permit', 10, 2);
+hooks()->add_filter('customers_permits_datatable_where',  'surveyors_filter_customer_permits_by_connection', 10, 2);
+hooks()->add_filter('can_view_customer_permit',           'surveyors_can_view_customer_permit', 10, 2);
+hooks()->add_filter('get_relation_data',    'surveyors_get_relation_data');
+hooks()->add_filter('relation_values',      'surveyors_relation_values');
+hooks()->add_filter('init_relation_options', 'surveyors_init_relation_options');
+
+// ─── Activation / Deactivation ───────────────────────────────────────────────
+
+register_activation_hook(SURVEYORS_MODULE_NAME, 'surveyors_module_activation_hook');
+
+function surveyors_module_activation_hook()
+{
+    $CI = &get_instance();
+    require_once(__DIR__ . '/install.php');
+    // Create uploads directory
+    if (!file_exists(SURVEYORS_ATTACHMENTS_FOLDER)) {
+        mkdir(SURVEYORS_ATTACHMENTS_FOLDER, 0755, true);
+    }
+    log_activity('Surveyors module activated');
+}
+
+register_deactivation_hook(SURVEYORS_MODULE_NAME, 'surveyors_module_deactivation_hook');
+
+function surveyors_module_deactivation_hook()
+{
+    $CI = &get_instance();
+    $CI->db->query('DROP TABLE IF EXISTS ' . db_prefix() . 'surveyor_activity');
+    $CI->db->query('DROP TABLE IF EXISTS ' . db_prefix() . 'surveyor_items');
+    $CI->db->query('DROP TABLE IF EXISTS ' . db_prefix() . 'surveyor_doc_equipment');
+    $CI->db->query('DROP TABLE IF EXISTS ' . db_prefix() . 'surveyor_permits');
+    $CI->db->query('DROP TABLE IF EXISTS ' . db_prefix() . 'surveyor_equipment');
+    $CI->db->query('DROP TABLE IF EXISTS ' . db_prefix() . 'surveyors');
+
+    // Remove options
+    $CI->db->where('name LIKE', 'surveyor%')->delete(db_prefix() . 'options');
+    $CI->db->where('type', 'surveyors')->delete(db_prefix() . 'emailtemplates');
+
+    log_activity('Surveyors module deactivated - tables dropped');
+}
+
+// ─── Language ─────────────────────────────────────────────────────────────────
+
+register_language_files(SURVEYORS_MODULE_NAME, [SURVEYORS_MODULE_NAME]);
+
+// ─── Menu ─────────────────────────────────────────────────────────────────────
+
+function surveyors_module_init_menu_items()
+{
+    $CI = &get_instance();
+
+    $CI->app->add_quick_actions_link([
+        'name'       => _l('surveyors'),
+        'url'        => 'surveyors',
+        'permission' => 'surveyors',
+        'icon'       => 'fa-solid fa-file-invoice',
+        'position'   => 11,
+    ]);
+
+    if (staff_can('view', 'surveyors') || staff_can('view_own', 'surveyors')) {
+        $CI->app_menu->add_sidebar_children_item('wasnaker-member', [
+            'slug'     => 'surveyors-tracking',
+            'name'     => _l('surveyors'),
+            'href'     => admin_url('surveyors'),
+            'position' => 5,
+        ]);
+    }
+
+    if (has_permission('surveyors', '', 'view')) {
+        $CI->app_menu->add_sidebar_children_item('reports', [
+            'slug'     => 'surveyors-report',
+            'name'     => _l('surveyors_report'),
+            'href'     => admin_url('surveyors/surveyors_report'),
+            'position' => 35,
+        ]);
+    }
+
+    if (is_admin() || is_staff_member()) {
+        $pending_count = $CI->db
+            ->where('client_type', 'surveyor')
+            ->where_in('registration_status', ['pending', 'user_activated'])
+            ->count_all_results(db_prefix() . 'staff');
+
+        $CI->app_menu->add_sidebar_children_item('wasnaker-registration', [
+            'slug'     => 'surveyors-pending-approvals',
+            'name'     => _l('surveyors'),
+            'href'     => admin_url('surveyors/pending_approvals'),
+            'position' => 1,
+            'badge'    => $pending_count > 0 ? ['count' => $pending_count, 'bg' => 'danger'] : [],
+        ]);
+    }
+}
+
+// ─── Relation Data Hooks ─────────────────────────────────────────────────────
+
+function surveyors_get_logged_staff_client_id()
+{
+    $CI    = &get_instance();
+    $staff = $CI->db->get_where(db_prefix() . 'staff', ['staffid' => get_staff_user_id()])->row();
+    return ($staff && !empty($staff->client_id)) ? (int) $staff->client_id : 0;
+}
+
+function surveyors_get_relation_data($data)
+{
+    $CI   = &get_instance();
+    $type = $CI->input->post('type');
+    $q    = trim((string) $CI->input->post('q'));
+
+    if ($type === 'surveyor_surveyor') {
+        $client_id = surveyors_get_logged_staff_client_id();
+
+        $CI->db->select('c.userid as id, c.company as name')
+               ->from(db_prefix() . 'clients c');
+
+        if ($client_id) {
+            $CI->db->join(
+                db_prefix() . 'client_connections cc',
+                '(cc.client_id_a = ' . $client_id . ' AND cc.client_id_b = c.userid)
+                 OR (cc.client_id_b = ' . $client_id . ' AND cc.client_id_a = c.userid)',
+                'inner'
+            )->where('cc.status', 'active');
+        }
+
+        $CI->db->where('c.client_type', 'surveyor')->where('c.active', 1);
+        if ($q) { $CI->db->like('c.company', $q); }
+
+        return $CI->db->get()->result_array();
+    }
+
+    if ($type === 'surveyor_equipment') {
+        $client_id = surveyors_get_logged_staff_client_id();
+
+        $CI->db->select('ce.id, i.description as name')
+               ->from(db_prefix() . 'surveyor_equipment ce')
+               ->join(db_prefix() . 'items i', 'i.id = ce.item_id');
+
+        if ($client_id) {
+            $CI->db->where('ce.client_id', $client_id);
+        }
+
+        if ($q) { $CI->db->like('i.description', $q); }
+
+        return $CI->db->get()->result_array();
+    }
+
+    return $data;
+}
+
+function surveyors_relation_values($values)
+{
+    $type = isset($values['type']) ? $values['type'] : '';
+
+    if ($type === 'surveyor_surveyor') {
+        $relation       = $values['relation'];
+        $id             = is_array($relation) ? $relation['id']   : $relation->id;
+        $name           = is_array($relation) ? $relation['name'] : $relation->name;
+        $values['id']   = $id;
+        $values['name'] = $name;
+        $values['link'] = admin_url('clients/client/' . $id);
+        return $values;
+    }
+
+    if ($type === 'surveyor_equipment') {
+        $relation       = $values['relation'];
+        $id             = is_array($relation) ? $relation['id']   : $relation->id;
+        $name           = is_array($relation) ? $relation['name'] : $relation->name;
+        $values['id']   = $id;
+        $values['name'] = $name;
+        $values['link'] = '';
+        return $values;
+    }
+
+    return $values;
+}
+
+function surveyors_init_relation_options($data)
+{
+    $CI   = &get_instance();
+    $type = $CI->input->post('type');
+
+    if ($type === 'surveyor_surveyor' || $type === 'surveyor_equipment') {
+        if (!has_permission('surveyors', '', 'view')) {
+            return [];
+        }
+        return $data;
+    }
+
+    return $data;
+}
+
+// ─── Permissions ──────────────────────────────────────────────────────────────
+
+function surveyors_permissions()
+{
+    $capabilities = [];
+    $capabilities['capabilities'] = [
+        'view'                 => _l('permission_view') . ' (' . _l('permission_global') . ')',
+        'view_own'             => _l('permission_view_own'),
+        'create'               => _l('permission_create'),
+        'edit'                 => _l('permission_edit'),
+        'edit_own'             => _l('permission_edit_own'),
+        'delete'               => _l('permission_delete'),
+        'convert_to_quotation' => _l('surveyor_permission_convert_to_quotation'),
+        'mark_as'              => _l('permission_mark_as'),
+        'sign_report'          => _l('surveyor_permission_sign_report'),
+    ];
+    register_staff_capabilities('surveyors', $capabilities, _l('surveyors'));
+}
+
+function surveyors_ensure_role_permissions()
+{
+    $CI = &get_instance();
+
+    $allowed = [
+        'Surveyor'              => ['view_own'],
+        'Assessor'              => ['view_own', 'sign_report'],
+        'Surveyor Sales'        => ['view_own'],
+        'Surveyor Finance'      => ['view_own'],
+        'Surveyor Operation'    => ['view_own'],
+        'Surveyor Admin'        => ['view', 'edit', 'create'],
+        'Surveyor Branch Admin' => ['view_own', 'edit_own'],
+        'Customer'              => ['view'],
+        'Customer Admin'        => ['view'],
+        'Customer Branch Admin' => ['view'],
+        'Association'           => ['view'],
+        'Association Admin'     => ['view'],
+        'Institution'           => ['view'],
+        'Institution Admin'     => ['view'],
+        'Institution Unit Admin' => ['view'],
+        'Finance'               => ['view'],
+        'Customer Service'      => ['view'],
+        'IT Support'            => ['view'],
+    ];
+
+    $denied = [
+        'Surveyor'              => ['view', 'edit', 'edit_own'],
+        'Assessor'              => ['view', 'edit', 'edit_own', 'create'],
+        'Surveyor Sales'        => ['view', 'edit', 'edit_own', 'create'],
+        'Surveyor Finance'      => ['view', 'edit', 'edit_own', 'create'],
+        'Surveyor Operation'    => ['view', 'edit', 'edit_own', 'create'],
+        'Surveyor Admin'        => ['view_own', 'edit_own'],
+        'Surveyor Branch Admin' => ['view', 'edit', 'create'],
+    ];
+
+    foreach ($allowed as $role_name => $caps) {
+        $role = $CI->db->get_where(db_prefix() . 'roles', ['name' => $role_name])->row();
+        if (!$role) { continue; }
+        $rid = (int) $role->roleid;
+        foreach ($caps as $cap) {
+            $key = 'surveyor_' . $cap . '_role_' . $rid;
+            if (get_option($key) === '') { add_option($key, '1'); }
+        }
+    }
+
+    foreach ($denied as $role_name => $caps) {
+        $role = $CI->db->get_where(db_prefix() . 'roles', ['name' => $role_name])->row();
+        if (!$role) { continue; }
+        $rid = (int) $role->roleid;
+        foreach ($caps as $cap) {
+            $key = 'surveyor_' . $cap . '_role_' . $rid;
+            if (get_option($key) === '') { add_option($key, '0'); }
+        }
+    }
+}
+
+function surveyors_staff_can_filter($result, $capability, $feature, $staff_id)
+{
+    if ($feature !== 'surveyors') { return $result; }
+    if ($result === true) { return true; }
+
+    $CI   = &get_instance();
+    $role = $CI->db->select('role')
+        ->get_where(db_prefix() . 'staff', ['staffid' => $staff_id])
+        ->row();
+
+    if (!$role || empty($role->role)) { return $result; }
+
+    $opt = get_option('surveyor_' . $capability . '_role_' . (int) $role->role);
+    if ($opt !== '') { return $opt == '1'; }
+
+    return $result;
+}
+
+function surveyors_add_contact_permission($permissions)
+{
+    $permissions[] = [
+        'id'         => 7,
+        'name'       => _l('surveyor_permission_surveyor'),
+        'short_name' => 'surveyors',
+    ];
+    return $permissions;
+}
+
+function surveyors_add_staff_permissions($permissions, $data)
+{
+    $permissions['surveyors'] = [
+        'name'         => _l('surveyors'),
+        'capabilities' => [
+            'view'                 => _l('permission_view') . ' (' . _l('permission_global') . ')',
+            'view_own'             => _l('permission_view_own'),
+            'create'               => _l('permission_create'),
+            'edit'                 => _l('permission_edit'),
+            'edit_own'             => _l('permission_edit') . ' (Own)',
+            'mark_as'              => _l('permission_mark_as'),
+            'convert_to_quotation' => _l('surveyor_permission_convert_to_quotation'),
+        ],
+    ];
+    return $permissions;
+}
+
+// ─── Settings Tab ─────────────────────────────────────────────────────────────
+
+function surveyors_settings_tab()
+{
+    $CI = &get_instance();
+    $CI->app->add_settings_section_child('finance', 'surveyors', [
+        'name'     => _l('surveyors'),
+        'view'     => 'surveyors/admin/settings/includes/surveyors',
+        'position' => 52,
+        'icon'     => 'fa-solid fa-file-invoice',
+    ]);
+}
+
+// ─── App_table Registration ───────────────────────────────────────────────────
+
+function surveyors_register_app_table()
+{
+    $tablePath = FCPATH . 'modules/' . SURVEYORS_MODULE_NAME . '/views/admin/tables/surveyors';
+
+    $surveyorsTable = App_table::new('surveyors', $tablePath)->customfieldable('surveyor');
+    App_table::register($surveyorsTable);
+
+    App_table::register(
+        App_table::new('project_surveyors', $tablePath)
+            ->relatedTo($surveyorsTable->id())
+            ->setRules($surveyorsTable->rules())
+    );
+}
+
+// ─── Dashboard Widget ─────────────────────────────────────────────────────────
+
+function _surveyors_is_surveyor_entity_user()
+{
+    $me = get_staff(get_staff_user_id());
+    return $me && $me->client_type === 'surveyor' && !empty($me->client_id);
+}
+
+function _surveyors_get_connected_customer_ids(int $surveyor_id): array
+{
+    $CI  = &get_instance();
+    $pfx = db_prefix();
+    $rows = $CI->db->query("
+        SELECT IF(cc.client_id_a = {$surveyor_id}, cc.client_id_b, cc.client_id_a) AS customer_id
+        FROM {$pfx}client_connections cc
+        WHERE (cc.client_id_a = {$surveyor_id} OR cc.client_id_b = {$surveyor_id})
+          AND cc.status = 'active'
+    ")->result_array();
+    return array_column($rows, 'customer_id');
+}
+
+// Filter customers datatable — surveyor sees only connected customers
+function surveyors_filter_customers_by_connection($where)
+{
+    if (!_surveyors_is_surveyor_entity_user()) { return $where; }
+
+    $me          = get_staff(get_staff_user_id());
+    $surveyor_id = (int) $me->client_id;
+    $pfx         = db_prefix();
+
+    $where[] = 'AND ' . $pfx . 'clients.userid IN (
+        SELECT IF(cc.client_id_a = ' . $surveyor_id . ', cc.client_id_b, cc.client_id_a)
+        FROM ' . $pfx . 'client_connections cc
+        WHERE (cc.client_id_a = ' . $surveyor_id . ' OR cc.client_id_b = ' . $surveyor_id . ')
+          AND cc.status = \'active\'
+    )';
+
+    return $where;
+}
+
+// Protect customer right panel — surveyor can only view connected customers
+function surveyors_can_view_customer_profile($can_view, $customer_id)
+{
+    if (!_surveyors_is_surveyor_entity_user()) { return $can_view; }
+
+    $me          = get_staff(get_staff_user_id());
+    $surveyor_id = (int) $me->client_id;
+    $connected   = _surveyors_get_connected_customer_ids($surveyor_id);
+
+    return in_array((int) $customer_id, $connected);
+}
+
+// Personnel permits datatable — surveyor sees only active permits from connected surveyors
+function surveyors_filter_permits_by_connection($where, $me)
+{
+    if (!_surveyors_is_surveyor_entity_user()) { return $where; }
+
+    $surveyor_id = (int) $me->client_id;
+    $pfx         = db_prefix();
+
+    $where[] = 'AND s.client_type = "surveyor"';
+    $where[] = 'AND s.client_id IN (
+        SELECT IF(cc.client_id_a = ' . $surveyor_id . ', cc.client_id_b, cc.client_id_a)
+        FROM ' . $pfx . 'client_connections cc
+        WHERE (cc.client_id_a = ' . $surveyor_id . ' OR cc.client_id_b = ' . $surveyor_id . ')
+          AND cc.status = \'active\'
+    )';
+    $where[] = 'AND p.status = "active"';
+
+    return $where;
+}
+
+// Protect permit right panel — surveyor can only view active permits from connected surveyors
+// Returns true (allow), 'not_connected' (surveyor not linked), or 'permit_not_active' (pending/expired)
+function surveyors_can_view_personnel_permit($can_view, $permit)
+{
+    if (!_surveyors_is_surveyor_entity_user()) { return $can_view; }
+
+    $CI          = &get_instance();
+    $me          = get_staff(get_staff_user_id());
+    $surveyor_id = (int) $me->client_id;
+
+    $staff = $CI->db->get_where(db_prefix() . 'staff', ['staffid' => (int) $permit->staff_id])->row();
+    if (!$staff || $staff->client_type !== 'surveyor') { return 'not_connected'; }
+
+    if (!entity_in_scope($me, (int) $staff->client_id, 'surveyor', 'personnels', 'view')) {
+        return 'not_connected';
+    }
+
+    if ($permit->status !== 'active') { return 'permit_not_active'; }
+
+    return $can_view;
+}
+
+// Customer permits datatable — surveyor sees only active permits from connected customers
+function surveyors_filter_customer_permits_by_connection($where, $me)
+{
+    if (!_surveyors_is_surveyor_entity_user()) { return $where; }
+
+    $surveyor_id = (int) $me->client_id;
+    $pfx         = db_prefix();
+
+    $where[] = 'AND p.customer_id IN (
+        SELECT IF(cc.client_id_a = ' . $surveyor_id . ', cc.client_id_b, cc.client_id_a)
+        FROM ' . $pfx . 'client_connections cc
+        WHERE (cc.client_id_a = ' . $surveyor_id . ' OR cc.client_id_b = ' . $surveyor_id . ')
+          AND cc.status = \'active\'
+    )';
+    $where[] = 'AND p.status = "active"';
+
+    return $where;
+}
+
+// Protect customer permit right panel — returns true, 'not_connected', or 'permit_not_active'
+function surveyors_can_view_customer_permit($can_view, $permit)
+{
+    if (!_surveyors_is_surveyor_entity_user()) { return $can_view; }
+
+    $me          = get_staff(get_staff_user_id());
+    $surveyor_id = (int) $me->client_id;
+
+    $connected = _surveyors_get_connected_customer_ids($surveyor_id);
+    if (!in_array((int) $permit->customer_id, $connected)) { return 'not_connected'; }
+
+    if ($permit->status !== 'active') { return 'permit_not_active'; }
+
+    return $can_view;
+}
+
+function surveyors_add_dashboard_widget($widgets)
+{
+    return $widgets;
+}
+
+// ─── Staff Member Deleted ─────────────────────────────────────────────────────
+
+function surveyors_staff_member_deleted($data)
+{
+    $CI = &get_instance();
+    $CI->db->where('sale_agent', $data['id']);
+    $CI->db->update(db_prefix() . 'surveyors', ['sale_agent' => $data['transfer_data_to']]);
+
+}
+
+// ─── Global Search ────────────────────────────────────────────────────────────
+
+function surveyors_global_search_result_output($output, $data)
+{
+    if ($data['type'] == 'surveyors') {
+        $output = '<a href="' . admin_url('surveyors/list_surveyors/' . $data['result']['id']) . '">'
+            . format_surveyor_number($data['result']['id']) . '</a>';
+    }
+    return $output;
+}
+
+function surveyors_global_search_result_query($result, $q, $limit)
+{
+    $CI = &get_instance();
+    if (has_permission('surveyors', '', 'view')) {
+        $CI->db->select()
+            ->from(db_prefix() . 'surveyors')
+            ->like('formatted_number', $q)
+            ->limit($limit);
+
+        $result[] = [
+            'result'         => $CI->db->get()->result_array(),
+            'type'           => 'surveyors',
+            'search_heading' => _l('surveyors'),
+        ];
+
+        if (isset($result[0]['result'][0]['id'])) {
+            return $result;
+        }
+
+        $CI->db->select()
+            ->from(db_prefix() . 'surveyors')
+            ->join(db_prefix() . 'clients', db_prefix() . 'surveyors.clientid=' . db_prefix() . 'clients.userid', 'left')
+            ->like(db_prefix() . 'clients.company', $q)
+            ->or_like(db_prefix() . 'surveyors.formatted_number', $q)
+            ->order_by(db_prefix() . 'clients.company', 'ASC')
+            ->limit($limit);
+
+        $result[] = [
+            'result'         => $CI->db->get()->result_array(),
+            'type'           => 'surveyors',
+            'search_heading' => _l('surveyors'),
+        ];
+    }
+    return $result;
+}
+
+// ─── Migration ────────────────────────────────────────────────────────────────
+
+function surveyors_migration_tables_to_replace_old_links($tables)
+{
+    $tables[] = [
+        'table' => db_prefix() . 'surveyors',
+        'field' => 'clientnote',
+    ];
+    $tables[] = [
+        'table' => db_prefix() . 'surveyors',
+        'field' => 'adminnote',
+    ];
+    return $tables;
+}
+
+// ─── Action Links ─────────────────────────────────────────────────────────────
+
+function module_surveyors_action_links($actions)
+{
+    $actions[] = '<a href="' . admin_url('settings?group=surveyors') . '">' . _l('settings') . '</a>';
+    return $actions;
+}
+
+// ─── Merge Fields ─────────────────────────────────────────────────────────────
+
+function surveyors_other_merge_fields_available_for($available_for)
+{
+    $available_for[] = 'surveyors';
+    return $available_for;
+}
+
+// ─── Email Templates Section ──────────────────────────────────────────────────
+
+function surveyors_email_templates_section()
+{
+    $CI = &get_instance();
+
+    $module = $CI->app_modules->get(SURVEYORS_MODULE_NAME);
+    if (!$module || (int) $module['activated'] !== 1) {
+        return;
+    }
+
+    $CI->load->model('emails_model');
+    $data['surveyor_email_templates'] = $CI->emails_model->get([
+        'type'     => 'surveyors',
+        'language' => 'english',
+    ]);
+    $data['hasPermissionEdit'] = staff_can('edit', 'email_templates');
+    $CI->load->view('surveyors/admin/emails/surveyor_email_templates', $data);
+}
+
+// ─── Cron Notification ────────────────────────────────────────────────────────
+
+function surveyors_notification()
+{
+    $CI = &get_instance();
+    $CI->load->model('surveyors/Surveyors_model', 'surveyors_model');
+
+    // Send expiry reminders
+    if (method_exists($CI->surveyors_model, 'send_expiry_reminder')) {
+        $CI->surveyors_model->send_expiry_reminder();
+    }
+
+    // Auto-expire overdue surveyors
+    $CI->db->where('expirydate <', date('Y-m-d'));
+    $CI->db->where('status', SURVEYOR_STATUS_SENT);
+    $CI->db->update(db_prefix() . 'surveyors', ['status' => SURVEYOR_STATUS_EXPIRED]);
+}
+
+// ─── Load Helper & Assets ─────────────────────────────────────────────────────
+
+$CI = &get_instance();
+$CI->load->helper(SURVEYORS_MODULE_NAME . '/surveyors');
+
+register_merge_fields(['surveyors/merge_fields/surveyor_merge_fields']);
+
+$current_url = $CI->uri->segment(1) . '/' . $CI->uri->segment(2);
+if (
+    ($CI->uri->segment(1) == 'admin' && $CI->uri->segment(2) == 'surveyors') ||
+    $CI->uri->segment(1) == 'surveyors'
+) {
+    $CI->app_css->add(
+        SURVEYORS_MODULE_NAME . '-css',
+        base_url('modules/' . SURVEYORS_MODULE_NAME . '/assets/css/surveyors.css')
+    );
+    $CI->app_scripts->add(
+        SURVEYORS_MODULE_NAME . '-js',
+        base_url('modules/' . SURVEYORS_MODULE_NAME . '/assets/js/surveyors.js') . '?v=' . filemtime(FCPATH . 'modules/' . SURVEYORS_MODULE_NAME . '/assets/js/surveyors.js')
+    );
+    $CI->app_scripts->add(
+        SURVEYORS_MODULE_NAME . '-branch-js',
+        base_url('modules/' . SURVEYORS_MODULE_NAME . '/assets/js/surveyor_branch.js') . '?v=' . filemtime(FCPATH . 'modules/' . SURVEYORS_MODULE_NAME . '/assets/js/surveyor_branch.js')
+    );
+}
+
+function surveyors_inactive_company_modal()
+{
+    $CI  = &get_instance();
+    $me  = get_staff(get_staff_user_id());
+
+    // Only for surveyor entity staff
+    if (!$me || $me->client_type !== 'surveyor' || !$me->client_id) { return; }
+
+    // Load company record
+    $company = $CI->db->get_where(db_prefix() . 'clients', [
+        'userid'      => (int) $me->client_id,
+        'client_type' => 'surveyor',
+    ])->row();
+
+    if (!$company || $company->active == 1) { return; }
+
+    // Build completeness checks
+    $checks = [
+        ['label' => _l('surveyor_vat'),        'ok' => !empty($company->vat)],
+        ['label' => _l('client_phonenumber'),  'ok' => !empty($company->phonenumber)],
+        ['label' => _l('client_address'),      'ok' => !empty($company->address)],
+        ['label' => _l('client_state'),        'ok' => !empty($company->state)],
+        ['label' => _l('client_city'),         'ok' => !empty($company->city)],
+        ['label' => _l('billing_address'),     'ok' => !empty($company->billing_street) && !empty($company->billing_city) && !empty($company->billing_state)],
+        ['label' => _l('surveyor_logo_light'), 'ok' => !empty($company->logo_light) || !empty($company->logo_dark)],
+        ['label' => _l('client_vat_number'),   'ok' => !empty($company->vat)],
+    ];
+
+    $total   = count($checks);
+    $filled  = count(array_filter(array_column($checks, 'ok')));
+    $percent = (int) round(($filled / $total) * 100);
+
+    $restricted = ['rfqs', 'quotations', 'orders', 'programs', 'jobs',
+                   'surveyors/equipment', 'schedules', 'billings'];
+
+    $edit_url  = admin_url('surveyors/surveyor/' . (int) $me->client_id);
+    $back_url  = admin_url('surveyors');
+    $comp_name = e($company->company);
+
+    $checks_js = json_encode(array_map(fn($c) => [
+        'label' => $c['label'],
+        'ok'    => (bool) $c['ok'],
+    ], $checks));
+
+    $restricted_js = json_encode($restricted);
+    ?>
+<!-- Inactive Company Modal -->
+<div class="modal fade" id="inactive-company-modal" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false">
+    <div class="modal-dialog modal-md" role="document">
+        <div class="modal-content" style="border:none;border-radius:12px;overflow:hidden;">
+
+            <!-- Header gradient -->
+            <div style="background:linear-gradient(135deg,#f59e0b 0%,#ef4444 100%);padding:28px 28px 20px;">
+                <div class="tw-flex tw-items-center tw-gap-3">
+                    <div style="background:rgba(255,255,255,0.2);border-radius:50%;width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                        <i class="fa fa-building" style="font-size:22px;color:#fff;"></i>
+                    </div>
+                    <div>
+                        <h4 style="color:#fff;margin:0;font-weight:700;font-size:18px;">
+                            <?= _l('inactive_company_modal_title'); ?>
+                        </h4>
+                        <p style="color:rgba(255,255,255,0.85);margin:0;font-size:13px;">
+                            <?= e($comp_name); ?>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-body" style="padding:24px 28px;">
+
+                <!-- Progress bar -->
+                <div class="tw-mb-4">
+                    <div class="tw-flex tw-justify-between tw-mb-2">
+                        <span class="tw-text-sm tw-font-medium tw-text-neutral-600"><?= _l('profile_completeness'); ?></span>
+                        <span class="tw-text-sm tw-font-bold" id="icm-percent-label"
+                            style="color:<?= $percent === 100 ? '#16a34a' : ($percent >= 60 ? '#d97706' : '#dc2626'); ?>">
+                            <?= $filled; ?>/<?= $total; ?> &mdash; <?= $percent; ?>%
+                        </span>
+                    </div>
+                    <div style="background:#f1f5f9;border-radius:999px;height:10px;overflow:hidden;">
+                        <div style="height:100%;border-radius:999px;width:<?= $percent; ?>%;
+                            background:<?= $percent === 100 ? '#16a34a' : ($percent >= 60 ? '#f59e0b' : '#ef4444'); ?>;
+                            transition:width .4s ease;"></div>
+                    </div>
+                </div>
+
+                <!-- Missing fields only -->
+                <?php $missing = array_filter($checks, fn($c) => !$c['ok']); ?>
+                <?php if (!empty($missing)) { ?>
+                <div class="tw-mb-4">
+                    <p class="tw-text-xs tw-font-semibold tw-uppercase tw-tracking-wide tw-text-neutral-400 tw-mb-2">
+                        <?= _l('profile_missing'); ?>
+                    </p>
+                    <?php foreach ($missing as $check) { ?>
+                    <div class="tw-flex tw-items-center tw-gap-2 tw-py-1.5 tw-border-b tw-border-neutral-100">
+                        <i class="fa fa-times-circle" style="color:#ef4444;font-size:16px;flex-shrink:0;"></i>
+                        <span class="tw-text-sm tw-font-medium tw-text-neutral-800"><?= e($check['label']); ?></span>
+                    </div>
+                    <?php } ?>
+                </div>
+                <?php } else { ?>
+                <div class="tw-mb-4 tw-p-3 tw-rounded-lg" style="background:#f0fdf4;border:1px solid #bbf7d0;">
+                    <div class="tw-flex tw-items-center tw-gap-2">
+                        <i class="fa fa-check-circle" style="color:#16a34a;font-size:18px;"></i>
+                        <span class="tw-text-sm tw-font-medium" style="color:#15803d;">
+                            <?= _l('profile_complete_ready'); ?>
+                        </span>
+                    </div>
+                </div>
+                <?php } ?>
+
+                <p class="tw-text-sm tw-text-neutral-500 tw-mb-0">
+                    <?= _l('inactive_company_modal_desc'); ?>
+                </p>
+            </div>
+
+            <div class="modal-footer" style="border-top:1px solid #f1f5f9;padding:16px 28px;background:#fafafa;">
+                <a href="<?= $back_url; ?>" class="btn btn-default">
+                    <i class="fa fa-arrow-left tw-mr-1"></i><?= _l('inactive_company_modal_later'); ?>
+                </a>
+                <?php if ($percent < 100) { ?>
+                <a href="<?= $edit_url; ?>" class="btn btn-primary" style="background:linear-gradient(135deg,#f59e0b,#ef4444);border:none;">
+                    <i class="fa fa-edit tw-mr-1"></i><?= _l('inactive_company_modal_complete'); ?>
+                </a>
+                <?php } ?>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var _restricted = <?= $restricted_js; ?>;
+    var _path       = window.location.pathname + window.location.hash;
+
+    function _isRestricted() {
+        return _restricted.some(function(seg) {
+            return _path.indexOf('/' + seg) !== -1;
+        });
+    }
+
+    $(function() {
+        if (_isRestricted()) {
+            $('#inactive-company-modal').modal({ show: true, backdrop: 'static', keyboard: false });
+        }
+    });
+})();
+</script>
+<?php
+}
