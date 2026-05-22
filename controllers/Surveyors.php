@@ -880,11 +880,6 @@ class Surveyors extends AdminController
 
     public function clear_acceptance_info($id)
     {
-        if (is_admin()) {
-            $this->db->where('id', $id);
-            $this->db->update(db_prefix() . 'surveyors', get_acceptance_info_array(true));
-        }
-
         redirect(admin_url('surveyors/list_surveyors/' . $id));
     }
 
