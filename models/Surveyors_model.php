@@ -336,6 +336,12 @@ class Surveyors_model extends App_Model
 
     public function get_surveyors_years()
     {
-        return $this->db->query('SELECT DISTINCT(YEAR(date)) as year FROM ' . db_prefix() . 'surveyors ORDER BY year DESC')->result_array();
+        return $this->db
+            ->select('DISTINCT(year) as year')
+            ->where('client_type', 'surveyor')
+            ->where('company_id IS NULL', null, false)
+            ->order_by('year', 'DESC')
+            ->get(db_prefix() . 'clients')
+            ->result_array();
     }
 }
