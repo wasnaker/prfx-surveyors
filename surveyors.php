@@ -346,13 +346,18 @@ function surveyors_staff_can_filter($result, $capability, $feature, $staff_id)
     if ($result === true) { return true; }
 
     $CI   = &get_instance();
-    $role = $CI->db->select('role')
+    $row  = $CI->db->select('admin, role')
         ->get_where(db_prefix() . 'staff', ['staffid' => $staff_id])
         ->row();
 
-    if (!$role || empty($role->role)) { return $result; }
+    if (!$row) { return $result; }
 
-    $opt = get_option('surveyor_' . $capability . '_role_' . (int) $role->role);
+    // Admin always has full access — guard against is_admin() int/string type mismatch
+    if ((int) $row->admin === 1) { return true; }
+
+    if (empty($row->role)) { return $result; }
+
+    $opt = get_option('surveyor_' . $capability . '_role_' . (int) $row->role);
     if ($opt !== '') { return $opt == '1'; }
 
     return $result;
