@@ -2,7 +2,14 @@
 
 defined('BASEPATH') or exit('No direct script access allowed');
 
-// Legacy tblsurveyors install files removed — surveyors now use tblclients (client_type='surveyor')
+// tblsurveyors removed — surveyors use tblclients (client_type='surveyor')
+require_once(__DIR__ . '/install/api_tokens.php');
+require_once(__DIR__ . '/install/surveyor_doc_equipment.php');
+require_once(__DIR__ . '/install/surveyor_items.php');
+require_once(__DIR__ . '/install/surveyor_activity.php');
+require_once(__DIR__ . '/install/surveyor_permits.php');
+require_once(__DIR__ . '/install/surveyor_permit_assessors.php');
+require_once(__DIR__ . '/install/surveyor_equipment.php');
 
 require_once __DIR__ . '/helpers/email_templates_helper.php';
 surveyors_register_email_templates();
