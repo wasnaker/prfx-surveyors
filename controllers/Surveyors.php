@@ -586,8 +586,8 @@ class Surveyors extends AdminController
         ];
         
         if (staff_can('edit',  'surveyors')) {
-            $this->db->where('id', $id);
-            $this->db->update(db_prefix() . 'surveyors', [
+            $this->db->where('userid', $id);
+            $this->db->update(db_prefix() . 'clients', [
                 'prefix' => $this->input->post('prefix'),
             ]);
 
@@ -619,9 +619,10 @@ class Surveyors extends AdminController
             }
         }
 
-        if (total_rows(db_prefix() . 'surveyors', [
-            'YEAR(date)' => date('Y', strtotime(to_sql_date($date))),
-            'number' => $number,
+        if (total_rows(db_prefix() . 'clients', [
+            'client_type' => 'surveyor',
+            'year'        => date('Y', strtotime(to_sql_date($date))),
+            'number'      => $number,
         ]) > 0) {
             echo 'false';
         } else {
