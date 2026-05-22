@@ -51,7 +51,7 @@ function get_surveyor_shortlink($surveyor)
 }
 
 /**
- * Check surveyor restrictions - hash, clientid
+ * Check surveyor restrictions - hash, client_id
  * @param  mixed $id   surveyor id
  * @param  string $hash surveyor hash
  */
@@ -75,7 +75,7 @@ function check_surveyor_restrictions($id, $hash)
     // Do one more check
     if (!is_staff_logged_in()) {
         if (get_option('view_surveyor_only_logged_in') == 1) {
-            if ($surveyor->clientid != get_client_user_id()) {
+            if ($surveyor->client_id != get_client_user_id()) {
                 show_404();
             }
         }

@@ -24,7 +24,7 @@
                             echo '</div>';
                         }
 $selected = [];
-$contacts = $this->clients_model->get_contacts($surveyor->clientid, ['active' => 1, 'surveyor_emails' => 1]);
+$contacts = $this->clients_model->get_contacts($surveyor->client_id, ['active' => 1, 'surveyor_emails' => 1]);
 
 if (! isset($schedule)) {
     foreach ($contacts as $contact) {

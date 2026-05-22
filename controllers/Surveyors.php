@@ -275,7 +275,7 @@ class Surveyors extends AdminController
         if ($this->input->get('surveyor_id')) {
             $data['surveyor_id'] = $this->input->get('surveyor_id');
         } elseif (!isset($data['surveyor'])) {
-            // Auto-fill clientid from logged-in surveyor staff
+            // Auto-fill client_id from logged-in surveyor staff
             $logged = $this->db->get_where(db_prefix() . 'staff', ['staffid' => get_staff_user_id()])->row();
             if ($logged && !empty($logged->client_id)) {
                 $data['surveyor_id'] = (int) $logged->client_id;

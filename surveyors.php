@@ -590,7 +590,7 @@ function surveyors_global_search_result_query($result, $q, $limit)
 
         $CI->db->select()
             ->from(db_prefix() . 'surveyors')
-            ->join(db_prefix() . 'clients', db_prefix() . 'surveyors.clientid=' . db_prefix() . 'clients.userid', 'left')
+            ->join(db_prefix() . 'clients', db_prefix() . 'surveyors.client_id=' . db_prefix() . 'clients.userid', 'left')
             ->like(db_prefix() . 'clients.company', $q)
             ->or_like(db_prefix() . 'surveyors.formatted_number', $q)
             ->order_by(db_prefix() . 'clients.company', 'ASC')
