@@ -11,7 +11,7 @@ require_once(__DIR__ . '/install/surveyor_permits.php');
 require_once(__DIR__ . '/install/surveyor_permit_assessors.php');
 require_once(__DIR__ . '/install/surveyor_equipment.php');
 
-require_once __DIR__ . '/helpers/email_templates_helper.php';
+require_once __DIR__ . '/helpers/surveyors_email_templates_helper.php';
 surveyors_register_email_templates();
 
 // Add module options
