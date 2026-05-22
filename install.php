@@ -11,53 +11,8 @@ require_once(__DIR__ . '/install/surveyor_permits.php');
 require_once(__DIR__ . '/install/surveyor_permit_assessors.php');
 require_once(__DIR__ . '/install/surveyor_equipment.php');
 
-// All slugs use unique surveyor- prefix — safe to use create_email_template()
-// since total_rows() won't find them in core type='client' templates.
-create_email_template(
-    'New Surveyor Registration Pending: {client_company}',
-    '<p>Hi,</p><p>A new surveyor registration is awaiting your approval.</p><p><strong>Company:</strong> {client_company}</p><p>Please log in to the admin panel to review and approve this registration.</p><p>{email_signature}</p>',
-    'surveyors', 'New Surveyor Registration (Sent to Admin)', 'new-surveyor-registered-to-admin'
-);
-create_email_template(
-    'Your Registration Has Been Approved',
-    '<p>Dear {contact_firstname} {contact_lastname},</p><p>Congratulations! Your registration with <strong>{companyname}</strong> has been approved. You can now log in to your account.</p><p>Kind Regards,</p><p>{email_signature}</p>',
-    'surveyors', 'Surveyor Registration Approved', 'surveyor-registration-confirmed'
-);
-create_email_template(
-    'Your registration has been received - {companyname}',
-    'Dear {contact_firstname} {contact_lastname},<br /><br />Thank you for registering on the <strong>{companyname}</strong> portal.<br /><br />Your registration is currently <strong>pending approval</strong>. We will notify you once your account has been reviewed.<br /><br />Kind Regards,<br />{email_signature}<br /><br />(This is an automated email, so please don\'t reply to this email address)',
-    'surveyors', 'Surveyor Registration Received (Welcome Email)', 'new-surveyor-created'
-);
-create_email_template(
-    'Set Your Password - {companyname}',
-    '<p>Dear {contact_firstname} {contact_lastname},</p><p>Please click the link below to set your password:</p><p><a href="{set_password_url}">{set_password_url}</a></p><p>Kind Regards,</p><p>{email_signature}</p>',
-    'surveyors', 'Set Password', 'surveyor-set-password'
-);
-create_email_template(
-    'Your Registration Was Not Approved',
-    '<p>Dear {contact_firstname} {contact_lastname},</p><p>Unfortunately your registration for <strong>{client_company}</strong> was not approved.</p><p>Please contact us if you have any questions.</p><p>Kind Regards,</p><p>{email_signature}</p>',
-    'surveyors', 'Surveyor Registration Rejected', 'surveyor-registration-rejected'
-);
-create_email_template(
-    'Reset Your Password - {companyname}',
-    '<p>Dear {contact_firstname} {contact_lastname},</p><p>We received a request to reset your password. Click the link below to reset it:</p><p><a href="{reset_password_url}">{reset_password_url}</a></p><p>Kind Regards,</p><p>{email_signature}</p>',
-    'surveyors', 'Forgot Password', 'surveyor-forgot-password'
-);
-create_email_template(
-    'Your Password Has Been Reset',
-    '<p>Dear {contact_firstname} {contact_lastname},</p><p>Your password has been successfully reset. You can now log in with your new password.</p><p>Kind Regards,</p><p>{email_signature}</p>',
-    'surveyors', 'Password Reset Confirmation', 'surveyor-password-reseted'
-);
-create_email_template(
-    'Verify Your Email Address - {companyname}',
-    '<p>Dear {contact_firstname} {contact_lastname},</p><p>Please verify your email address by clicking the link below:</p><p><a href="{surveyor_verification_url}">{surveyor_verification_url}</a></p><p>Kind Regards,</p><p>{email_signature}</p>',
-    'surveyors', 'Email Verification', 'surveyor-verification-email'
-);
-create_email_template(
-    'Surveyor Profile File Uploaded: {client_company}',
-    '<p>Hi,</p><p>A new file has been uploaded to the surveyor profile of <strong>{client_company}</strong>.</p><p>View files: <a href="{surveyor_profile_files_admin_link}">{surveyor_profile_files_admin_link}</a></p><p>{email_signature}</p>',
-    'surveyors', 'Surveyor Profile File Uploaded (Sent to Staff)', 'new-surveyor-profile-file-uploaded-to-staff'
-);
+require_once __DIR__ . '/helpers/email_templates_helper.php';
+surveyors_register_email_templates();
 
 // Add module options
 add_option('surveyor_registration_min_seconds', 8);
