@@ -181,17 +181,15 @@ function surveyor_status_color_class($id, $replace_default_by_muted = false)
  */
 function is_last_surveyor($id)
 {
-    $CI = &get_instance();
-    $CI->db->select('id')->from(db_prefix() . 'surveyors')->order_by('id', 'desc')->limit(1);
-    $query            = $CI->db->get();
-    $row              = $query->row();
+    $CI  = &get_instance();
+    $row = $CI->db->select('userid')
+        ->where('client_type', 'surveyor')
+        ->where('company_id IS NULL', null, false)
+        ->order_by('userid', 'DESC')
+        ->limit(1)
+        ->get(db_prefix() . 'clients')->row();
     if (!$row) { return false; }
-    $last_surveyor_id = $row->id;
-    if ($last_surveyor_id == $id) {
-        return true;
-    }
-
-    return false;
+    return (int) $row->userid === (int) $id;
 }
 
 /**

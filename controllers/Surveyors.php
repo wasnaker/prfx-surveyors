@@ -698,18 +698,6 @@ class Surveyors extends AdminController
         if ($this->input->post()) {
             $data['totals'] = $this->surveyors_model->get_surveyors_total($this->input->post());
 
-            $this->load->model('currencies_model');
-
-            if (!$this->input->post('surveyor_id')) {
-                $multiple_currencies = call_user_func('is_using_multiple_currencies', db_prefix() . 'surveyors');
-            } else {
-                $multiple_currencies = call_user_func('is_client_using_multiple_currencies', $this->input->post('surveyor_id'), db_prefix() . 'surveyors');
-            }
-
-            if ($multiple_currencies) {
-                $data['currencies'] = $this->currencies_model->get();
-            }
-
             $data['surveyors_years'] = $this->surveyors_model->get_surveyors_years();
 
             if (
