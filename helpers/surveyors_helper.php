@@ -38,12 +38,6 @@ function get_surveyor_shortlink($surveyor)
     ]);
 
     if ($short_link) {
-        $CI = &get_instance();
-        $CI->db->where('id', $surveyor->id);
-        $CI->db->update(db_prefix() . 'surveyors', [
-            'short_link' => $short_link,
-        ]);
-
         return $short_link;
     }
 
@@ -296,7 +290,7 @@ function staff_has_assigned_surveyors($staff_id = '')
     if (is_numeric($cache)) {
         $result = $cache;
     } else {
-        $result = total_rows(db_prefix() . 'surveyors', ['sale_agent' => $staff_id]);
+        $result = 0; // sale_agent not applicable — surveyors are entities in tblclients
         $CI->app_object_cache->add('staff-total-assigned-surveyors-' . $staff_id, $result);
     }
 

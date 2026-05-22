@@ -552,10 +552,7 @@ function surveyors_add_dashboard_widget($widgets)
 
 function surveyors_staff_member_deleted($data)
 {
-    $CI = &get_instance();
-    $CI->db->where('sale_agent', $data['id']);
-    $CI->db->update(db_prefix() . 'surveyors', ['sale_agent' => $data['transfer_data_to']]);
-
+    // sale_agent not applicable — surveyors are entities in tblclients
 }
 
 // ─── Global Search ────────────────────────────────────────────────────────────
@@ -573,27 +570,11 @@ function surveyors_global_search_result_query($result, $q, $limit)
 {
     $CI = &get_instance();
     if (has_permission('surveyors', '', 'view')) {
-        $CI->db->select()
-            ->from(db_prefix() . 'surveyors')
-            ->like('formatted_number', $q)
-            ->limit($limit);
-
-        $result[] = [
-            'result'         => $CI->db->get()->result_array(),
-            'type'           => 'surveyors',
-            'search_heading' => _l('surveyors'),
-        ];
-
-        if (isset($result[0]['result'][0]['id'])) {
-            return $result;
-        }
-
-        $CI->db->select()
-            ->from(db_prefix() . 'surveyors')
-            ->join(db_prefix() . 'clients', db_prefix() . 'surveyors.client_id=' . db_prefix() . 'clients.userid', 'left')
-            ->like(db_prefix() . 'clients.company', $q)
-            ->or_like(db_prefix() . 'surveyors.formatted_number', $q)
-            ->order_by(db_prefix() . 'clients.company', 'ASC')
+        $CI->db->select('userid as id, company, formatted_number')
+            ->from(db_prefix() . 'clients')
+            ->where('client_type', 'surveyor')
+            ->where('company_id IS NULL', null, false)
+            ->like('company', $q)
             ->limit($limit);
 
         $result[] = [
@@ -609,14 +590,6 @@ function surveyors_global_search_result_query($result, $q, $limit)
 
 function surveyors_migration_tables_to_replace_old_links($tables)
 {
-    $tables[] = [
-        'table' => db_prefix() . 'surveyors',
-        'field' => 'clientnote',
-    ];
-    $tables[] = [
-        'table' => db_prefix() . 'surveyors',
-        'field' => 'adminnote',
-    ];
     return $tables;
 }
 
@@ -668,10 +641,7 @@ function surveyors_notification()
         $CI->surveyors_model->send_expiry_reminder();
     }
 
-    // Auto-expire overdue surveyors
-    $CI->db->where('expirydate <', date('Y-m-d'));
-    $CI->db->where('status', SURVEYOR_STATUS_SENT);
-    $CI->db->update(db_prefix() . 'surveyors', ['status' => SURVEYOR_STATUS_EXPIRED]);
+    // Auto-expire not applicable — surveyors are entities in tblclients
 }
 
 // ─── Load Helper & Assets ─────────────────────────────────────────────────────
