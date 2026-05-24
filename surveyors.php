@@ -126,7 +126,6 @@ hooks()->add_action('admin_init',                    'surveyors_ensure_role_perm
 hooks()->add_filter('staff_can',                     'surveyors_staff_can_filter', 10, 4);
 hooks()->add_filter('staff_permissions',             'surveyors_add_staff_permissions', 10, 2);
 hooks()->add_filter('get_contact_permissions',       'surveyors_add_contact_permission');
-hooks()->add_filter('role_capabilities_features',    'surveyors_register_capabilities', 10);
 // ─── Menu ─────────────────────────────────────────────────────────────────────
 
 function surveyors_module_init_menu_items()
