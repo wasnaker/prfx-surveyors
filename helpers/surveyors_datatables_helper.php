@@ -4,6 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 // ─── Hook Registrations ────────────────────────────────────────────────────────
 
+hooks()->add_filter('surveyors_table_sql_where',         'surveyors_own_table_scope_filter');
 hooks()->add_filter('customers_table_sql_where',          'surveyors_filter_customers_by_connection');
 hooks()->add_filter('can_view_customer_profile',          'surveyors_can_view_customer_profile', 10, 2);
 hooks()->add_filter('personnels_permits_datatable_where', 'surveyors_filter_permits_by_connection', 10, 2);
@@ -30,6 +31,19 @@ function _surveyors_get_connected_customer_ids(int $surveyor_id): array
           AND cc.status = 'active'
     ")->result_array();
     return array_column($rows, 'customer_id');
+}
+
+// ─── Surveyors Table Hooks (Own Scope) ─────────────────────────────────────────
+
+function surveyors_own_table_scope_filter($where)
+{
+    $_me = get_staff(get_staff_user_id());
+    if (!$_me || $_me->client_type !== 'surveyor' || empty($_me->client_id)) { return $where; }
+
+    $cap     = staff_can('edit', 'surveyors') ? 'edit' : 'view';
+    $where[] = 'AND ' . entity_scope_where($_me, db_prefix() . 'clients.userid', 'surveyor', 'surveyors', $cap);
+
+    return $where;
 }
 
 // ─── Customer Datatable Hooks ──────────────────────────────────────────────────

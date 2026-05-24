@@ -4,9 +4,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 return App_table::find('surveyors')
     ->outputUsing(function ($params) {
-        $_me             = get_staff(get_staff_user_id());
-        $owner_client_id = ($_me && $_me->client_type === 'surveyor' && $_me->client_id)
-            ? (int) $_me->client_id : null;
+        $_me = get_staff(get_staff_user_id());
 
         $aColumns = [
             get_sql_select_client_company(),
@@ -20,11 +18,6 @@ return App_table::find('surveyors')
         $sTable       = db_prefix() . 'clients';
         $join         = [];
         $where        = ['AND ' . db_prefix() . 'clients.client_type = "surveyor"'];
-
-        if ($_me && $_me->client_type === 'surveyor' && $owner_client_id) {
-            $cap     = staff_can('edit', 'surveyors') ? 'edit' : 'view';
-            $where[] = 'AND ' . entity_scope_where($_me, db_prefix() . 'clients.userid', 'surveyor', 'surveyors', $cap);
-        }
 
         if ($filtersWhere = $this->getWhereFromRules()) {
             $where[] = $filtersWhere;
