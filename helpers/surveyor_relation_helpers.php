@@ -94,7 +94,7 @@ function surveyors_relation_values($values)
         $name           = is_array($relation) ? $relation['name'] : $relation->name;
         $values['id']   = $id;
         $values['name'] = $name;
-        $values['link'] = admin_url('clients/client/' . $id);
+        $values['link'] = admin_url('surveyors/list_surveyor/' . $id);
         return $values;
     }
 
