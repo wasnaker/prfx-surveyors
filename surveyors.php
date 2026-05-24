@@ -53,7 +53,6 @@ define('SURVEYOR_STATUS_EXPIRED',  5);
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
-hooks()->add_action('after_email_templates',         'surveyors_email_templates_section');
 hooks()->add_action('admin_init',                    'surveyors_settings_tab');
 hooks()->add_action('admin_init',                    'surveyors_register_app_table');
 hooks()->add_action('after_cron_run',                'surveyors_notification');
@@ -104,6 +103,10 @@ function surveyors_module_deactivation_hook()
 // ─── Language ─────────────────────────────────────────────────────────────────
 
 register_language_files(SURVEYORS_MODULE_NAME, [SURVEYORS_MODULE_NAME]);
+
+// ─── Email Templates Helper ─────────────────────────────────────────────────
+
+require_once(__DIR__ . '/helpers/surveyors_email_templates_helper.php');
 
 // ─── Relation Helpers ─────────────────────────────────────────────────────────
 
@@ -227,24 +230,6 @@ function surveyors_other_merge_fields_available_for($available_for)
 }
 
 // ─── Email Templates Section ──────────────────────────────────────────────────
-
-function surveyors_email_templates_section()
-{
-    $CI = &get_instance();
-
-    $module = $CI->app_modules->get(SURVEYORS_MODULE_NAME);
-    if (!$module || (int) $module['activated'] !== 1) {
-        return;
-    }
-
-    $CI->load->model('emails_model');
-    $data['surveyor_email_templates'] = $CI->emails_model->get([
-        'type'     => 'surveyors',
-        'language' => 'english',
-    ]);
-    $data['hasPermissionEdit'] = staff_can('edit', 'email_templates');
-    $CI->load->view('surveyors/admin/emails/surveyor_email_templates', $data);
-}
 
 // ─── Cron Notification ────────────────────────────────────────────────────────
 
