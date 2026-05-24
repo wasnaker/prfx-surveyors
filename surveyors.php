@@ -53,7 +53,6 @@ define('SURVEYOR_STATUS_EXPIRED',  5);
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
 
-hooks()->add_action('admin_init',                    'surveyors_module_init_menu_items');
 hooks()->add_action('after_email_templates',         'surveyors_email_templates_section');
 hooks()->add_action('admin_init',                    'surveyors_settings_tab');
 hooks()->add_action('admin_init',                    'surveyors_register_app_table');
