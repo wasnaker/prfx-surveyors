@@ -105,6 +105,47 @@ function surveyors_ensure_role_permissions()
             if (get_option($key) === '') { add_option($key, '0'); }
         }
     }
+
+    // ── Cross-module: commission_receipt caps for surveyor roles ─────────────
+    $cr_allowed = [
+        'Surveyor Admin'        => ['view'],
+        'Surveyor Branch Admin' => ['view_own'],
+        'Surveyor'              => ['view_own'],
+        'Assessor'              => ['view_own'],
+        'Surveyor Sales'        => ['view_own'],
+        'Surveyor Finance'      => ['view_own'],
+        'Surveyor Operation'    => ['view_own'],
+    ];
+
+    $cr_denied = [
+        'Surveyor Admin'        => ['view_own', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+        'Surveyor Branch Admin' => ['view', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+        'Surveyor'              => ['view', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+        'Assessor'              => ['view', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+        'Surveyor Sales'        => ['view', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+        'Surveyor Finance'      => ['view', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+        'Surveyor Operation'    => ['view', 'create', 'edit', 'edit_own', 'mark_as', 'delete'],
+    ];
+
+    foreach ($cr_allowed as $role_name => $caps) {
+        $role = $CI->db->get_where(db_prefix() . 'roles', ['name' => $role_name])->row();
+        if (!$role) { continue; }
+        $rid = (int) $role->roleid;
+        foreach ($caps as $cap) {
+            $key = 'commission_receipt_' . $cap . '_role_' . $rid;
+            if (get_option($key) === '') { add_option($key, '1'); }
+        }
+    }
+
+    foreach ($cr_denied as $role_name => $caps) {
+        $role = $CI->db->get_where(db_prefix() . 'roles', ['name' => $role_name])->row();
+        if (!$role) { continue; }
+        $rid = (int) $role->roleid;
+        foreach ($caps as $cap) {
+            $key = 'commission_receipt_' . $cap . '_role_' . $rid;
+            if (get_option($key) === '') { add_option($key, '0'); }
+        }
+    }
 }
 
 // ─── Layer 4: Role Capabilities Matrix ───────────────────────────────────────
