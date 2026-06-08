@@ -13,3 +13,13 @@ function surveyors_register_dashboard_widgets($widgets)
 
     return $widgets;
 }
+
+function get_surveyors_widget_data()
+{
+    $data        = get_dashboard_widget_data();
+    $data->total = $data->CI->db
+        ->where('client_type', 'surveyor')
+        ->count_all_results('tblclients');
+
+    return $data;
+}
