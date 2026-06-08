@@ -16,15 +16,7 @@ function surveyors_register_dashboard_widgets($widgets)
 
 function get_surveyors_widget_data()
 {
-    if (function_exists('get_dashboard_widget_data')) {
-        $data = get_dashboard_widget_data();
-    } else {
-        $CI          = &get_instance();
-        $data        = new stdClass();
-        $data->CI    = $CI;
-        $data->theme = get_option('active_admin_theme');
-    }
-
+    $data        = get_dashboard_widget_data();
     $data->total = $data->CI->db
         ->where('client_type', 'surveyor')
         ->count_all_results('tblclients');
