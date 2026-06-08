@@ -2,13 +2,13 @@
 <?php
 $total_surveyors = $GLOBALS['CI']->db->where('client_type', 'surveyor')->count_all_results('tblclients');
 $theme = get_option('active_admin_theme'); 
-
+$widget_id = create_widget_id();
 
 ?>
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<div class="widget relative" id="widget-<?php echo create_widget_id(); ?>" data-name="<?php echo _l('surveyors'); ?>">
+<div class="widget relative surveyors widget-<?php echo $widget_id; ?>" id="widget-<?php echo $widget_id; ?>" data-name="<?php echo _l('surveyors'); ?>">
     <div class="panel_s">
-        <div class="panel-body padding-10">
+        <div class="panel-body  <?php echo $theme?>-padding">
             <div class="widget-dragger"></div>
                 <div class="metronic materialize">
 
