@@ -6,7 +6,7 @@ function surveyors_register_dashboard_widgets($widgets)
 {
     $widgets[] = [
         'path'      => 'surveyors/admin/dashboard/widgets/total_surveyors',
-        'container' => 'mini-1',
+        'container' => 'mini-2',
         'id'        => 'total-surveyors',
         'name'      => 'Total Surveyors',
     ];
