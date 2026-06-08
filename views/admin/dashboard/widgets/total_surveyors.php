@@ -1,6 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<?php $w = get_surveyors_widget_data(); ?>
-<div class="widget relative surveyors widget-<?php echo $w->widget_id; ?>" id="widget-<?php echo $w->widget_id; ?>" data-name="<?php echo _l('surveyors'); ?>">
+<?php $w = get_surveyors_widget_data(); $widget_id = create_widget_id(); ?>
+<div class="widget relative surveyors widget-<?php echo $widget_id; ?>" id="widget-<?php echo $widget_id; ?>" data-name="<?php echo _l('surveyors'); ?>">
     <div class="panel_s">
         <div class="panel-body <?php echo $w->theme; ?>-padding">
             <div class="widget-dragger"></div>
