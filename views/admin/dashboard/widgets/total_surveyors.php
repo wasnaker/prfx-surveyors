@@ -13,6 +13,7 @@ $widget_id = create_widget_id();
                 <div class="metronic materialize">
 
                     <div class="widget-title-bar <?php echo $theme?>-title">
+                        <i class="fa fa-map-marker widget-title-icon"></i>
                         <h4 class="widget-title"><?php echo _l('surveyors'); ?></h4>
                     </div>
 
