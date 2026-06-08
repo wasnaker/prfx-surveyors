@@ -161,11 +161,13 @@ function surveyors_register_app_table()
     );
 }
 
-// ─── Dashboard Widget ─────────────────────────────────────────────────────────
+// ─── Dashboard Widget Helper ─────────────────────────────────────────────────
+
+require_once(__DIR__ . '/helpers/surveyors_widgets_helper.php');
 
 function surveyors_add_dashboard_widget($widgets)
 {
-    return $widgets;
+    return surveyors_register_dashboard_widgets($widgets);
 }
 
 // ─── Staff Member Deleted ─────────────────────────────────────────────────────

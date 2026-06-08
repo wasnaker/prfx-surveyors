@@ -39,10 +39,16 @@ function surveyors_init_menu_items()
     }
 
     if (is_admin() || is_staff_member()) {
-        $pending_count = $CI->db
-            ->where('client_type', 'surveyor')
-            ->where_in('registration_status', ['pending', 'user_activated'])
-            ->count_all_results(db_prefix() . 'staff');
+        $pending_count = 0;
+
+        // Check if client_type and registration_status columns exist before querying
+        if ($CI->db->field_exists('client_type', db_prefix() . 'staff') &&
+            $CI->db->field_exists('registration_status', db_prefix() . 'staff')) {
+            $pending_count = $CI->db
+                ->where('client_type', 'surveyor')
+                ->where_in('registration_status', ['pending', 'user_activated'])
+                ->count_all_results(db_prefix() . 'staff');
+        }
 
         $CI->app_menu->add_sidebar_children_item('wasnaker-registration', [
             'slug'     => 'surveyors-pending-approvals',

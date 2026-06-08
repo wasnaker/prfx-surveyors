@@ -81,11 +81,18 @@ if (!$CI->db->field_exists('client_type', db_prefix() . 'clients')) {
 
 // Add company_id for branch relationship (branch.company_id → parent.userid)
 if (!$CI->db->field_exists('company_id', db_prefix() . 'clients')) {
-    $CI->db->query(
-        'ALTER TABLE `' . db_prefix() . 'clients`
-         ADD COLUMN `company_id` INT NULL DEFAULT NULL
-         AFTER `client_type`'
-    );
+    if ($CI->db->field_exists('client_type', db_prefix() . 'clients')) {
+        $CI->db->query(
+            'ALTER TABLE `' . db_prefix() . 'clients`
+             ADD COLUMN `company_id` INT NULL DEFAULT NULL
+             AFTER `client_type`'
+        );
+    } else {
+        $CI->db->query(
+            'ALTER TABLE `' . db_prefix() . 'clients`
+             ADD COLUMN `company_id` INT NULL DEFAULT NULL'
+        );
+    }
 }
 
 // Unique branch name per parent surveyor
@@ -100,11 +107,18 @@ if (!$branch_name_unique || (int)$branch_name_unique->cnt === 0) {
 
 // use_vat: branch uses parent company's NPWP instead of its own NITKU
 if (!$CI->db->field_exists('use_vat', db_prefix() . 'clients')) {
-    $CI->db->query(
-        'ALTER TABLE `' . db_prefix() . 'clients`
-         ADD COLUMN `use_vat` TINYINT(1) NOT NULL DEFAULT 0
-         AFTER `nitku`'
-    );
+    if ($CI->db->field_exists('nitku', db_prefix() . 'clients')) {
+        $CI->db->query(
+            'ALTER TABLE `' . db_prefix() . 'clients`
+             ADD COLUMN `use_vat` TINYINT(1) NOT NULL DEFAULT 0
+             AFTER `nitku`'
+        );
+    } else {
+        $CI->db->query(
+            'ALTER TABLE `' . db_prefix() . 'clients`
+             ADD COLUMN `use_vat` TINYINT(1) NOT NULL DEFAULT 0'
+        );
+    }
 }
 
 // Add nitku (tax ID for branch offices) with unique constraint
@@ -141,7 +155,7 @@ if (!$nitku_unique || (int)$nitku_unique->cnt === 0) {
 
 // Add registration_status to tblstaff
 if (!$CI->db->field_exists('registration_status', db_prefix() . 'staff')) {
-    $CI->db->query("ALTER TABLE `" . db_prefix() . "staff` ADD COLUMN `registration_status` ENUM('pending','user_activated','approved','rejected') NOT NULL DEFAULT 'approved' AFTER `is_entity_owner`");
+    $CI->db->query("ALTER TABLE `" . db_prefix() . "staff` ADD COLUMN `registration_status` ENUM('pending','user_activated','approved','rejected') NOT NULL DEFAULT 'approved'");
 } else {
     $CI->db->query("ALTER TABLE `" . db_prefix() . "staff` MODIFY `registration_status` ENUM('pending','user_activated','approved','rejected') NOT NULL DEFAULT 'approved'");
 }
