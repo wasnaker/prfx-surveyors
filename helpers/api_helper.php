@@ -7,7 +7,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
  * Agar muncul di dropdown permission saat membuat/mengedit API user
  */
 hooks()->add_filter('api_permissions', function ($permissions) {
-    $permissions['surveyors'] = [
+    $permissions['surveyors_api'] = [
         'name'         => _l('surveyors'),
         'capabilities' => [
             'get'        => _l('permission_get'),

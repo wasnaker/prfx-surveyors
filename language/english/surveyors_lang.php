@@ -214,3 +214,6 @@ $lang['doc_type_bpjs_tk']       = 'BPJS Ketenagakerjaan';
 $lang['doc_type_bpjs_kes']      = 'BPJS Kesehatan';
 $lang['doc_notary_name']        = 'Notary Name';
 $lang['doc_sk_kemenkumham']     = 'SK Kemenkumham';
+
+$lang['permission_mark_as']  = 'Mark As';
+$lang['permission_edit_own']  = 'Edit (Own)';

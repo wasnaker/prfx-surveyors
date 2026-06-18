@@ -29,6 +29,20 @@ class SurveyorsSeeder extends BaseSeeder
         'Dwipa','Edy','Fauzi','Guntur','Hafiz','Irwan','Jamal','Kamal','Latif','Munir',
     ];
 
+    // Koordinat realistis — address diambil dari $companies saat run()
+    private array $hq_coords = [
+        [-6.2893, 106.8413],
+        [-6.2371, 106.8153],
+        [-6.1204, 106.8928],
+        [-6.2435, 107.0014],
+        [-6.1186, 106.1505],
+        [-6.0194, 106.0500],
+        [-6.1783, 106.6300],
+        [-6.1568, 106.2153],
+        [-6.1031, 106.7961],
+        [-6.3015, 106.7954],
+    ];
+
     private array $companies = [
         // [email, staff_lastname, vat, company, phone, address, city, state, zip, staff]
         ['sv.sucofindo@demo.local',   'Sucofindo',   '03.001.000.0-054.000',
@@ -167,14 +181,35 @@ class SurveyorsSeeder extends BaseSeeder
             $assessor_sid = $j + 1 + (2 * $n) + $idx;
             $this->_insert_staff($assessor_sid, $afirst . ' ' . $alast, 'Assessor', '0800000' . $idx, $userid, $rid_assessor);
 
+            [$clat, $clng] = $this->hq_coords[$idx];
+            $this->_upsert_coordinates($userid, 'surveyor', $clat, $clng, $address . ', ' . $city . ', ' . $state);
+
             $ids[] = $userid;
         }
 
         return $ids;
     }
 
+    private function _upsert_coordinates(int $userid, string $entity_type, float $lat, float $lng, string $address): void
+    {
+        $t = db_prefix() . 'entity_coordinates';
+        $this->db->query(
+            "INSERT INTO {$t} (userid, entity_type, latitude, longitude, address, dateupdated)
+             VALUES (?, ?, ?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE latitude=VALUES(latitude), longitude=VALUES(longitude),
+                                     address=VALUES(address), dateupdated=NOW()",
+            [$userid, $entity_type, $lat, $lng, $address]
+        );
+    }
+
     private function _clean(): void
     {
+        $hq_ids = range(self::CLIENT_START + 1, self::CLIENT_START + 10);
+        $this->no_debug(function () use ($hq_ids) {
+            $this->db->where_in('userid', $hq_ids)
+                     ->where('entity_type', 'surveyor')
+                     ->delete(db_prefix() . 'entity_coordinates');
+        });
         $this->no_debug(function () {
             $this->db->where('client_type', 'surveyor')
                      ->where('company_id IS NOT NULL', null, false)
