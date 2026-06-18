@@ -23,6 +23,7 @@ class Surveyors_model extends App_Model
      */
     public function get($id = false)
     {
+        $this->db->where('client_type', 'surveyor');
         if ($id) {
             return $this->db->get_where(db_prefix() . 'clients', ['userid' => $id])->row();
         }
@@ -104,6 +105,7 @@ class Surveyors_model extends App_Model
         if (isset($data['vat'])) {
             $data['vat'] = $this->normalize_tax_number($data['vat']) ?: null;
         }
+        $data['year'] = date('Y');
         return $this->clients_model->add($data);
     }
 
@@ -158,6 +160,7 @@ class Surveyors_model extends App_Model
             'client_type' => 'surveyor',
             'company_id'  => (int) $parent_id,
             'datecreated' => date('Y-m-d H:i:s'),
+            'year'        => date('Y'),
             'addedfrom'   => get_staff_user_id(),
         ];
         $this->db->insert(db_prefix() . 'clients', $insert);
