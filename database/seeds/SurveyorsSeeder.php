@@ -153,6 +153,7 @@ class SurveyorsSeeder extends BaseSeeder
                 'active'      => 1,
                 'addedfrom'   => $staffid,
                 'datecreated' => $this->now,
+                'year' => date('Y'),
             ]);
 
             $this->upsert('staff', 'staffid', [

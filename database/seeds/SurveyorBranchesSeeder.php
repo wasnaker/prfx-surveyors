@@ -108,6 +108,7 @@ class SurveyorBranchesSeeder extends BaseSeeder
                 'active'      => 1,
                 'addedfrom'   => $branch_sid,
                 'datecreated' => $this->now,
+                'year' => date('Y'),
             ]);
 
             $branch_ids[] = $branchid;
